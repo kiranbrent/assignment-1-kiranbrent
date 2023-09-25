@@ -1,0 +1,189 @@
+---
+title: "Kiran Brent Coding Assignment 1"
+format: html
+editor: visual
+author: Kiran Brent
+---
+
+```{r}
+
+flfp_indicators <- wb_search("female labor force") # store the list of indicators
+
+print(flfp_indicators, n=26) # view the indicators
+```
+
+```{r}
+# Load packages
+library(wbstats) # for downloading WB data
+library(dplyr) # for selecting, renaming and mutating
+library(janitor) # for rounding
+library(vdemdata)
+```
+
+# Step 1: Downloading the Data
+
+```{r}
+
+# Download the data
+WPEI_data <- vdem |> # download the V-Dem dataset
+  filter(year >= 1990)  |> # filter out years less than 1990
+  select(                  # select (and rename) these variables
+    country = country_name,     # the name before the = sign is the new name  
+    vdem_ctry_id = country_id,  # the name after the = sign is the old name
+    year, 
+    WPEI = v2x_gender, #women political empowerment index
+    gdp_pc = e_gdppc, 
+    region = e_regionpol_6C
+    ) |>
+  mutate(
+    region = case_match(region, # replace the values in region with names
+                     1 ~ "Eastern Europe", 
+                     2 ~ "Latin America",  
+                     3 ~ "Middle East",   
+                     4 ~ "Africa", 
+                     5 ~ "The West", 
+                     6 ~ "Asia")
+                    # number on the left of the ~ is the V-Dem region code
+                    # we are changing the number to the country name on the right
+                    # of the equals sign
+  )
+
+# View the data
+glimpse(WPEI_data)
+```
+
+# Step 2: Downloading the Data from the World Bank
+
+```{r}
+library(wbstats) #
+wb_indicators_search <- wb_search(pattern = "female")
+
+indicators <- c("f_menstruation" = "SG.MHG.UMDP.ZS", "f_purchases" = "SG.DMK.DPCH.FN.ZS") 
+
+# Download the data  
+women_emp <- wb_data(indicators, mrv = 20) |> # download data for last 50 yrs
+  select(!iso2c) |> # drop the iso2c code which we won't be using
+  rename(year = date) |> # rename date to year 
+  mutate(
+    f_menstruation = round_to_fraction(f_menstruation, denominator = 100), # round to nearest 100th
+    f_purchases = round_to_fraction(f_purchases, denominator = 100) 
+  )
+
+glimpse(women_emp)
+```
+
+# Step 3: Merge the Data
+
+```{r}
+install.packages("readr")
+install.packages('countrycode')
+library(countrycode)
+
+WPEI_data <- WPEI_data |>    
+  mutate(iso3c = countrycode(sourcevar = vdem_ctry_id,
+        origin = "vdem",         
+        destination = "wb"))  |> 
+  relocate(iso3c, .after = vdem_ctry_id)  
+
+```
+
+```{r}
+# Merging the data with a left join here: 
+library(readr)
+
+
+women_data <- left_join(WPEI_data, women_emp, by = c("iso3c", "year")) |> 
+  rename(country = country.x) |> 
+  select(!country.y)             
+
+# Save as .csv for future use
+write_csv(women_data, "/Users/kiranbrent/Desktop/DataViz/coding assignment/women_data.csv")
+
+# View the data
+glimpse(women_data)  
+```
+
+# Step 4: Summarize Dataset
+
+```{r}
+women_summ <- women_data |>
+  group_by(region)  |>
+  summarize(
+    f_menstruation = mean(f_menstruation, na.rm = TRUE),
+    gdp_pc = mean(gdp_pc, na.rm = TRUE),
+    WPEI = mean(WPEI, na.rm = TRUE),
+    f_purchases = mean(f_purchases, na.rm = TRUE)
+  ) |>
+  arrange(desc(WPEI))
+
+women_summ
+
+
+women_summ2 <- women_data |>
+  group_by(region)  |>
+  summarize(
+    f_menstruation = mean(f_menstruation, na.rm = TRUE),
+    gdp_pc = mean(gdp_pc, na.rm = TRUE),
+    WPEI = mean(WPEI, na.rm = TRUE),
+    f_purchases = mean(f_purchases, na.rm = TRUE)
+  ) |>
+  arrange(desc(f_purchases))
+
+women_summ2
+
+women_summ3 <- women_data |>
+  group_by(region)  |>
+  summarize(
+    f_menstruation = mean(f_menstruation, na.rm = TRUE),
+    gdp_pc = mean(gdp_pc, na.rm = TRUE),
+    WPEI = mean(WPEI, na.rm = TRUE),
+    f_purchases = mean(f_purchases, na.rm = TRUE)
+  ) |>
+  arrange(desc(f_menstruation))
+
+women_summ3
+
+women_summ4 <- women_data |>
+  group_by(country)  |>
+  summarize(
+    f_menstruation = mean(f_menstruation, na.rm = TRUE),
+    gdp_pc = mean(gdp_pc, na.rm = TRUE),
+    WPEI = mean(WPEI, na.rm = TRUE),
+    f_purchases = mean(f_purchases, na.rm = TRUE)
+  ) |>
+  arrange(desc(f_menstruation))
+
+women_summ4
+
+women_summ5 <- women_data |>
+  group_by(country)  |>
+  summarize(
+    f_menstruation = mean(f_menstruation, na.rm = TRUE),
+    gdp_pc = mean(gdp_pc, na.rm = TRUE),
+    WPEI = mean(WPEI, na.rm = TRUE),
+    f_purchases = mean(f_purchases, na.rm = TRUE)
+  ) |>
+  arrange(desc(WPEI))
+
+women_summ5
+
+women_summ6 <- women_data |>
+  group_by(country)  |>
+  summarize(
+    f_menstruation = mean(f_menstruation, na.rm = TRUE),
+    gdp_pc = mean(gdp_pc, na.rm = TRUE),
+    WPEI = mean(WPEI, na.rm = TRUE),
+    f_purchases = mean(f_purchases, na.rm = TRUE)
+  ) |>
+  arrange(desc(f_purchases))
+
+women_summ6
+```
+
+Key WPEI: Women's political power index f_menstruation: Women and girls who use menstrual materials f_purchases: Women participating in making daily purchase decisions
+
+Regionally, the West has the highest WPEI (0.91), which greatly exceeds all other parts of the world. The lowest WPEI is in Asia (0.62), closely followed by Africa (0.63). These values imply that representation in the areas with a lower WPEI is less than those with a higher WPEI. However, the f_purchases index may indicate otherwise, given that women making purchase decisons should increase with women representation. Latin America has the highest percent of women making daily purchase decisions (82.4), followed by Eastern Europe (77.4), and Africa has the lowest (62.2). Data on purchases is not available for the west as a whole, but these findings are consistent with the idea that there is higher women representation in the Western World, including the America's and Europe. Finally, f_menstruation also supports this idea, given that women representation and menstrual item use is positively correlated. Africa and Asia have the lowest values, in the 94% range, and all other regions are above 96%. Overall, the data supports that there is greater women representation in the West (America's and Europe included), and there is less representation in Asia and Africa.
+
+# Step 5: Interpret Data
+
+In Norris's reading, the author argues in favor of proportional representation in government. Norris urges that without PR, government systems will fall out of balance and no longer be socially inclusive. Norris describes that female representation is often the most inclusive in the Nordic states, and the worst in Arab states. Falling somewhere in the middle are the America's, Asia, the Pacific, and Sub-Saharan Africa. My analysis in this assignment reflects these claims made by Norris, also described in Step 4. For example, the WPEI is the highest in the west, where the Nordic countries lie, and lower in areas containing Arab run states. This likely occurs for historical/religious reasons many Arab governments are built on. Looking on a country basis, I chose two opposite places Norris discussed in her reading: Denmark and Saudi Arabia. Denmark has a WPEI of 0.96, one of the highest out of all the country measurements. Saudi Arabia has an alarmingly low WPEI of 0.21, confirming its place as the lowest of every country. In the middle, we can look at Mexico, with a WPEI of 0.70. In order to help countries be more gender inclusive, governments should involve the solutions to proportional representation that Norris describes such as statutory quotas and reserved seats.
